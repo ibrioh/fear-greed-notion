@@ -1,50 +1,203 @@
-<!DOCTYPE html>
-<html>
+<!doctype html>
+<html lang="de">
 <head>
   <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Fear & Greed Index</title>
+
+  <!-- Chart.js CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+
   <style>
+    :root { color-scheme: dark; }
     body {
-      font-family: Inter, Arial, sans-serif;
-      background: #0f172a;
-      color: white;
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      height: 100vh;
       margin: 0;
+      background: #070b18;
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+      color: #fff;
     }
-    .box {
-      padding: 24px 32px;
+    .wrap {
+      height: 100vh;
+      width: 100vw;
+      display: grid;
+      grid-template-rows: auto 1fr;
+      gap: 12px;
+      padding: 16px;
+      box-sizing: border-box;
+    }
+    .header {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+    .title {
+      font-size: 16px;
+      opacity: 0.9;
+    }
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 12px;
       border-radius: 12px;
-      background: #020617;
-      text-align: center;
-      box-shadow: 0 10px 30px rgba(0,0,0,.4);
+      background: rgba(255,255,255,0.06);
+      border: 1px solid rgba(255,255,255,0.08);
     }
     .value {
-      font-size: 48px;
-      font-weight: bold;
+      font-size: 28px;
+      font-weight: 700;
+      line-height: 1;
     }
     .label {
-      font-size: 18px;
-      opacity: .8;
+      font-size: 12px;
+      opacity: 0.75;
+      margin-top: 2px;
     }
+    .controls {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      flex-wrap: wrap;
+      opacity: 0.95;
+    }
+    select {
+      background: rgba(255,255,255,0.06);
+      color: #fff;
+      border: 1px solid rgba(255,255,255,0.10);
+      border-radius: 10px;
+      padding: 8px 10px;
+      outline: none;
+    }
+    .card {
+      border-radius: 16px;
+      background: rgba(255,255,255,0.04);
+      border: 1px solid rgba(255,255,255,0.08);
+      padding: 12px;
+      display: grid;
+    }
+    canvas { width: 100% !important; height: 100% !important; }
+    .hint { font-size: 12px; opacity: 0.6; }
   </style>
 </head>
+
 <body>
-  <div class="box">
-    <div class="value" id="value">–</div>
-    <div class="label" id="label">Loading…</div>
+  <div class="wrap">
+    <div class="header">
+      <div>
+        <div class="title">Crypto Fear &amp; Greed Index</div>
+        <div class="hint">Quelle: alternative.me API</div>
+      </div>
+
+      <div class="controls">
+        <label for="days">Zeitraum:</label>
+        <select id="days">
+          <option value="30">30 Tage</option>
+          <option value="90">90 Tage</option>
+          <option value="180">180 Tage</option>
+          <option value="365" selected>365 Tage</option>
+        </select>
+
+        <div class="badge" id="badge">
+          <div>
+            <div class="value" id="nowValue">—</div>
+            <div class="label" id="nowText">lädt…</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <canvas id="chart"></canvas>
+    </div>
   </div>
 
-  <script>
-    fetch("https://api.alternative.me/fng/")
-      .then(r => r.json())
-      .then(j => {
-        const d = j.data[0];
-        document.getElementById("value").innerText = d.value;
-        document.getElementById("label").innerText = d.value_classification;
-      });
-  </script>
+<script>
+  const API = "https://api.alternative.me/fng/?limit=0&format=json"; // liefert Zeitreihe
+  const ctx = document.getElementById("chart");
+  const daysSel = document.getElementById("days");
+  const nowValueEl = document.getElementById("nowValue");
+  const nowTextEl = document.getElementById("nowText");
+
+  function classify(v) {
+    v = Number(v);
+    if (v <= 25) return "Extreme Fear";
+    if (v <= 45) return "Fear";
+    if (v <= 55) return "Neutral";
+    if (v <= 75) return "Greed";
+    return "Extreme Greed";
+  }
+
+  function toDateLabel(unixSeconds) {
+    const d = new Date(Number(unixSeconds) * 1000);
+    return d.toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit" });
+  }
+
+  let chart;
+
+  async function loadAndRender() {
+    const res = await fetch(API);
+    const json = await res.json();
+
+    // json.data: neueste zuerst -> wir drehen um für saubere x-Achse
+    const all = (json.data || []).slice().reverse();
+
+    const days = Number(daysSel.value);
+    const slice = all.slice(-days);
+
+    const labels = slice.map(p => toDateLabel(p.timestamp));
+    const values = slice.map(p => Number(p.value));
+
+    // aktueller Wert = letztes Element
+    const now = values[values.length - 1];
+    nowValueEl.textContent = now;
+    nowTextEl.textContent = classify(now);
+
+    if (chart) chart.destroy();
+
+    chart = new Chart(ctx, {
+      type: "line",
+      data: {
+        labels,
+        datasets: [{
+          label: "F&G",
+          data: values,
+          tension: 0.25,
+          pointRadius: 0,
+          borderWidth: 2
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        interaction: { mode: "index", intersect: false },
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            callbacks: {
+              label: (c) => ` ${c.parsed.y} (${classify(c.parsed.y)})`
+            }
+          }
+        },
+        scales: {
+          y: {
+            min: 0,
+            max: 100,
+            grid: { color: "rgba(255,255,255,0.06)" },
+            ticks: { color: "rgba(255,255,255,0.75)" }
+          },
+          x: {
+            grid: { display: false },
+            ticks: { color: "rgba(255,255,255,0.65)", maxTicksLimit: 10 }
+          }
+        }
+      }
+    });
+  }
+
+  daysSel.addEventListener("change", loadAndRender);
+  loadAndRender();
+</script>
 </body>
 </html>
