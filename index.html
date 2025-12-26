@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Fear & Greed Index</title>
+  <style>
+    body {
+      font-family: Inter, Arial, sans-serif;
+      background: #0f172a;
+      color: white;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      margin: 0;
+    }
+    .box {
+      padding: 24px 32px;
+      border-radius: 12px;
+      background: #020617;
+      text-align: center;
+      box-shadow: 0 10px 30px rgba(0,0,0,.4);
+    }
+    .value {
+      font-size: 48px;
+      font-weight: bold;
+    }
+    .label {
+      font-size: 18px;
+      opacity: .8;
+    }
+  </style>
+</head>
+<body>
+  <div class="box">
+    <div class="value" id="value">–</div>
+    <div class="label" id="label">Loading…</div>
+  </div>
+
+  <script>
+    fetch("https://api.alternative.me/fng/")
+      .then(r => r.json())
+      .then(j => {
+        const d = j.data[0];
+        document.getElementById("value").innerText = d.value;
+        document.getElementById("label").innerText = d.value_classification;
+      });
+  </script>
+</body>
+</html>
